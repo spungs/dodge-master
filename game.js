@@ -66,7 +66,21 @@ const texts = {
         rankingSearchPlaceholder: 'Search nickname',
         countryLabel: 'Country:',
         countrySearchPlaceholder: 'Search country...',
-        pleaseSelectCountry: 'Please select a country.'
+        pleaseSelectCountry: 'Please select a country.',
+        shareYourScore: 'Share your score!',
+        linkCopied: 'Link copied!',
+        twitterShareText: 'I survived {time} seconds in Dodge Master! 🎮 Can you beat my score?',
+        facebookShareText: 'Check out my Dodge Master score!',
+        tutorialTitle: 'Welcome to Dodge Master! 🎮',
+        tutorialStep1Title: 'Controls',
+        tutorialStep1Text: 'Use arrow keys or joystick to move',
+        tutorialStep2Title: 'Objective',
+        tutorialStep2Text: 'Dodge incoming projectiles and survive as long as possible',
+        tutorialStep3Title: 'Leaderboard',
+        tutorialStep3Text: 'Compete with players worldwide and climb the rankings',
+        tutorialTips: '<strong>Tips:</strong> Green bullets are slow, red bullets are fast, blue bullets pause briefly!',
+        tutorialStartText: 'Start Game',
+        tutorialDontShowText: "Don't show this again"
     },
     ko: {
         gameTitle: '닷지 마스터',
@@ -98,7 +112,21 @@ const texts = {
         rankingSearchPlaceholder: '닉네임 검색',
         countryLabel: '국가:',
         countrySearchPlaceholder: '국가 검색...',
-        pleaseSelectCountry: '국가를 선택해주세요.'
+        pleaseSelectCountry: '국가를 선택해주세요.',
+        shareYourScore: '점수를 공유하세요!',
+        linkCopied: '링크가 복사되었습니다!',
+        twitterShareText: '닷지 마스터에서 {time}초를 버텼어요! 🎮 당신은 이 기록을 깰 수 있나요?',
+        facebookShareText: '제 닷지 마스터 점수를 확인해보세요!',
+        tutorialTitle: '닷지 마스터에 오신 것을 환영합니다! 🎮',
+        tutorialStep1Title: '조작법',
+        tutorialStep1Text: '방향키 또는 조이스틱으로 이동하세요',
+        tutorialStep2Title: '목표',
+        tutorialStep2Text: '날아오는 탄환을 피하면서 최대한 오래 생존하세요',
+        tutorialStep3Title: '순위표',
+        tutorialStep3Text: '전 세계 플레이어들과 경쟁하고 순위를 올리세요',
+        tutorialTips: '<strong>팁:</strong> 초록색 총알은 느리고, 빨간색 총알은 빠르며, 파란색 총알은 잠시 멈춥니다!',
+        tutorialStartText: '게임 시작',
+        tutorialDontShowText: '다시 보지 않기'
     }
 };
 
@@ -1081,9 +1109,15 @@ function updateAllTexts() {
     
     // 국가 목록 다시 로드 (언어 변경 시)
     loadCountryOptions();
-    
+
     // 다른 서비스 링크 다시 렌더링 (언어 변경 시)
     renderServices();
+
+    // 소셜 공유 텍스트 업데이트
+    const shareTextElement = document.getElementById('shareText');
+    if (shareTextElement) {
+        shareTextElement.textContent = t.shareYourScore;
+    }
 }
 
 // 신기록 체크
@@ -1540,6 +1574,12 @@ async function initializeGame() {
     blueProjectiles.length = 0;
     lastBlueBulletTime = 0;
     renderServices(); // 다른 서비스 링크 렌더링
+
+    // 튜토리얼 체크 (첫 방문자에게만 표시)
+    setTimeout(() => {
+        checkAndShowTutorial();
+    }, 500);
+
     gameLoop();
 }
 
@@ -1603,3 +1643,151 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 initializeGame();
+
+// ============================================
+// 튜토리얼 기능
+// ============================================
+
+// 튜토리얼 표시 여부 확인 및 표시
+function checkAndShowTutorial() {
+    const hasSeenTutorial = localStorage.getItem('dodgeMasterTutorialSeen');
+
+    if (!hasSeenTutorial) {
+        showTutorial();
+    }
+}
+
+// 튜토리얼 표시
+function showTutorial() {
+    const tutorialOverlay = document.getElementById('tutorialOverlay');
+    if (tutorialOverlay) {
+        tutorialOverlay.style.display = 'block';
+        updateTutorialTexts();
+    }
+}
+
+// 튜토리얼 닫기
+function closeTutorial() {
+    const tutorialOverlay = document.getElementById('tutorialOverlay');
+    const dontShowAgain = document.getElementById('tutorialDontShowAgain');
+
+    if (tutorialOverlay) {
+        tutorialOverlay.style.display = 'none';
+    }
+
+    // "다시 보지 않기" 체크 시 localStorage에 저장
+    if (dontShowAgain && dontShowAgain.checked) {
+        localStorage.setItem('dodgeMasterTutorialSeen', 'true');
+    }
+}
+
+// 튜토리얼 텍스트 업데이트
+function updateTutorialTexts() {
+    const t = texts[currentLanguage];
+
+    const elements = {
+        'tutorialTitle': t.tutorialTitle,
+        'tutorialStep1Title': t.tutorialStep1Title,
+        'tutorialStep1Text': t.tutorialStep1Text,
+        'tutorialStep2Title': t.tutorialStep2Title,
+        'tutorialStep2Text': t.tutorialStep2Text,
+        'tutorialStep3Title': t.tutorialStep3Title,
+        'tutorialStep3Text': t.tutorialStep3Text,
+        'tutorialStartText': t.tutorialStartText,
+        'tutorialDontShowText': t.tutorialDontShowText
+    };
+
+    for (const [id, text] of Object.entries(elements)) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = text;
+        }
+    }
+
+    // HTML 포함 텍스트
+    const tutorialTipsElement = document.getElementById('tutorialTips');
+    if (tutorialTipsElement) {
+        tutorialTipsElement.innerHTML = t.tutorialTips;
+    }
+}
+
+// ============================================
+// 소셜 공유 기능
+// ============================================
+
+// Twitter 공유
+function shareToTwitter() {
+    const t = texts[currentLanguage];
+    const time = finalGameTime.toFixed(3);
+    const text = t.twitterShareText.replace('{time}', time);
+    const url = encodeURIComponent(window.location.href);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${url}&hashtags=DodgeMaster,BrowserGame`;
+    window.open(twitterUrl, '_blank', 'width=550,height=420');
+}
+
+// Facebook 공유
+function shareToFacebook() {
+    const url = encodeURIComponent(window.location.href);
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    window.open(facebookUrl, '_blank', 'width=550,height=420');
+}
+
+// 링크 복사
+async function copyLinkToClipboard() {
+    const t = texts[currentLanguage];
+    const url = window.location.href;
+
+    try {
+        // 클립보드 API 사용 (모던 브라우저)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+            showCopyFeedback();
+        } else {
+            // 폴백: 구형 브라우저용
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                document.execCommand('copy');
+                showCopyFeedback();
+            } catch (err) {
+                console.error('링크 복사 실패:', err);
+                alert('링크 복사에 실패했습니다.');
+            }
+
+            document.body.removeChild(textArea);
+        }
+    } catch (err) {
+        console.error('클립보드 접근 실패:', err);
+        alert('링크 복사에 실패했습니다.');
+    }
+}
+
+// 복사 성공 피드백
+function showCopyFeedback() {
+    const t = texts[currentLanguage];
+    const copyBtn = document.querySelector('.copy-btn');
+    const shareText = document.getElementById('shareText');
+
+    if (copyBtn) {
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+            copyBtn.classList.remove('copied');
+        }, 2000);
+    }
+
+    if (shareText) {
+        const originalText = shareText.textContent;
+        shareText.textContent = t.linkCopied;
+        shareText.style.color = '#28a745';
+        setTimeout(() => {
+            shareText.textContent = originalText;
+            shareText.style.color = '';
+        }, 2000);
+    }
+}
