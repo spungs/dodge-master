@@ -147,6 +147,71 @@ let totalPauseTime = 0; // 총 일시정지 시간
 let gameSessionStart = 0; // 실제 게임 시작 타임스탬프
 let gameSessionId = null; // 게임 세션 ID
 
+// ============================================
+// Google Analytics 이벤트 트래킹
+// ============================================
+
+// GA4 이벤트 전송 헬퍼 함수
+function trackEvent(eventName, eventParams = {}) {
+    if (typeof gtag === 'function') {
+        gtag('event', eventName, eventParams);
+        // console.log('GA Event:', eventName, eventParams);
+    }
+}
+
+// 게임 시작 트래킹
+function trackGameStart() {
+    trackEvent('game_start', {
+        event_category: 'game',
+        event_label: 'new_game'
+    });
+}
+
+// 게임 오버 트래킹
+function trackGameOver(survivalTime, isNewRecord) {
+    trackEvent('game_over', {
+        event_category: 'game',
+        event_label: isNewRecord ? 'new_record' : 'normal',
+        value: Math.round(survivalTime * 1000), // 밀리초 단위
+        survival_time: survivalTime
+    });
+}
+
+// 랭킹 저장 트래킹
+function trackRankingSave(survivalTime) {
+    trackEvent('ranking_save', {
+        event_category: 'engagement',
+        event_label: 'save_score',
+        value: Math.round(survivalTime * 1000)
+    });
+}
+
+// 소셜 공유 트래킹
+function trackSocialShare(platform, survivalTime) {
+    trackEvent('share', {
+        event_category: 'social',
+        event_label: platform,
+        method: platform,
+        value: Math.round(survivalTime * 1000)
+    });
+}
+
+// 튜토리얼 완료 트래킹
+function trackTutorialComplete(dontShowAgain) {
+    trackEvent('tutorial_complete', {
+        event_category: 'onboarding',
+        event_label: dontShowAgain ? 'dismissed' : 'completed'
+    });
+}
+
+// 언어 변경 트래킹
+function trackLanguageChange(newLanguage) {
+    trackEvent('language_change', {
+        event_category: 'settings',
+        event_label: newLanguage
+    });
+}
+
 // 페이지 가시성 변경 감지
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
@@ -490,6 +555,10 @@ function detectCollisions() {
                 gameOver = true;
                 finalGameTime = gameTime;
                 checkNewRecord();
+
+                // GA 트래킹
+                trackGameOver(finalGameTime, isNewRecord);
+
                 showGameOverModal();
             }
         }
@@ -519,6 +588,10 @@ function detectCollisions() {
                 gameOver = true;
                 finalGameTime = gameTime;
                 checkNewRecord();
+
+                // GA 트래킹
+                trackGameOver(finalGameTime, isNewRecord);
+
                 showGameOverModal();
             }
         }
@@ -1065,6 +1138,9 @@ async function getRankings() {
 function toggleLanguage() {
     currentLanguage = currentLanguage === 'en' ? 'ko' : 'en';
     updateAllTexts();
+
+    // GA 트래킹
+    trackLanguageChange(currentLanguage);
 }
 
 // 모든 텍스트 업데이트
@@ -1295,6 +1371,10 @@ async function saveRankingFromModal() {
         } else {
             // 저장 성공
             localStorage.setItem('selectedCountry', selectedCountryCode);
+
+            // GA 트래킹
+            trackRankingSave(timeValidation.value);
+
             closeGameOverModal();
             await getBestRecord();
             await getRankings();
@@ -1526,6 +1606,9 @@ function resetGame() {
     // ============================================
     createGameSession();
 
+    // GA 트래킹
+    trackGameStart();
+
     player.x = canvas.width / 2;
     player.y = canvas.height / 2;
     player.health = 100;
@@ -1549,6 +1632,10 @@ function onGiveUp() {
         gameOver = true;
         finalGameTime = gameTime; // 현재 시간을 최종 시간으로 저장
         checkNewRecord();
+
+        // GA 트래킹
+        trackGameOver(finalGameTime, isNewRecord);
+
         showGameOverModal();
     }
 }
@@ -1676,9 +1763,13 @@ function closeTutorial() {
     }
 
     // "다시 보지 않기" 체크 시 localStorage에 저장
-    if (dontShowAgain && dontShowAgain.checked) {
+    const isDismissed = dontShowAgain && dontShowAgain.checked;
+    if (isDismissed) {
         localStorage.setItem('dodgeMasterTutorialSeen', 'true');
     }
+
+    // GA 트래킹
+    trackTutorialComplete(isDismissed);
 }
 
 // 튜토리얼 텍스트 업데이트
@@ -1722,6 +1813,10 @@ function shareToTwitter() {
     const text = t.twitterShareText.replace('{time}', time);
     const url = encodeURIComponent(window.location.href);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${url}&hashtags=DodgeMaster,BrowserGame`;
+
+    // GA 트래킹
+    trackSocialShare('twitter', finalGameTime);
+
     window.open(twitterUrl, '_blank', 'width=550,height=420');
 }
 
@@ -1729,6 +1824,10 @@ function shareToTwitter() {
 function shareToFacebook() {
     const url = encodeURIComponent(window.location.href);
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+
+    // GA 트래킹
+    trackSocialShare('facebook', finalGameTime);
+
     window.open(facebookUrl, '_blank', 'width=550,height=420');
 }
 
@@ -1741,6 +1840,10 @@ async function copyLinkToClipboard() {
         // 클립보드 API 사용 (모던 브라우저)
         if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(url);
+
+            // GA 트래킹
+            trackSocialShare('copy_link', finalGameTime);
+
             showCopyFeedback();
         } else {
             // 폴백: 구형 브라우저용
@@ -1754,6 +1857,10 @@ async function copyLinkToClipboard() {
 
             try {
                 document.execCommand('copy');
+
+                // GA 트래킹
+                trackSocialShare('copy_link', finalGameTime);
+
                 showCopyFeedback();
             } catch (err) {
                 console.error('링크 복사 실패:', err);

@@ -41,6 +41,19 @@
     <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6002876774605337" crossorigin="anonymous"></script>
 
+    <!-- Google Analytics 4 -->
+    <!-- TODO: Replace 'G-XXXXXXXXXX' with your actual GA4 Measurement ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-XXXXXXXXXX', {
+            'cookie_flags': 'SameSite=None;Secure',
+            'send_page_view': true
+        });
+    </script>
+
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
     {
