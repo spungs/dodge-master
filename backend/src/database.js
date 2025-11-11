@@ -30,6 +30,7 @@ class RankingsDatabase {
   /**
    * Initialize database schema
    * Creates tables and indexes if they don't exist
+   * Also cleans up old rankings from previous months
    * @returns {Promise<void>}
    */
   async initializeDatabase() {
@@ -55,6 +56,12 @@ class RankingsDatabase {
     await this.dbRun(createTableSQL);
     await this.dbRun(createMonthIndexSQL);
     await this.dbRun(createTimeIndexSQL);
+
+    // Clean up old rankings from previous months
+    const cleanup = await this.deleteOldRankings();
+    if (cleanup.changes > 0) {
+      console.log(`Deleted ${cleanup.changes} old ranking(s) from previous month(s)`);
+    }
   }
 
   /**
@@ -158,6 +165,18 @@ class RankingsDatabase {
 
     const result = await this.dbGet(sql, month);
     return result || null;
+  }
+
+  /**
+   * Delete rankings from previous months
+   * Only keeps data from the current month
+   * @returns {Promise<{changes: number}>} Number of deleted records
+   */
+  async deleteOldRankings() {
+    const currentMonth = this.getCurrentMonth();
+    const sql = `DELETE FROM rankings WHERE month < ?`;
+    const result = await this.dbRun(sql, currentMonth);
+    return { changes: result.changes };
   }
 
   /**

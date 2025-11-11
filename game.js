@@ -23,10 +23,16 @@ function resizeCanvas() {
 // 화면 크기 변경 시 캔버스 재조정
 window.addEventListener('resize', resizeCanvas);
 
-// Supabase 클라이언트 초기화
-const SUPABASE_URL = 'https://shueysnmlgmczilyushe.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNodWV5c25tbGdtY3ppbHl1c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIxMzMxODMsImV4cCI6MjA2NzcwOTE4M30.mQMPZoIf5r5aeXTFCjucyhiLlHdIM6nYy3TJTlvMAo0';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// API 설정
+const API_BASE_URL = 'http://localhost:3000/api';
+
+// 현재 월 가져오기 (YYYY-MM 형식)
+function getCurrentMonth() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+}
 
 // 언어 설정
 let currentLanguage = 'en'; // 'en' 또는 'ko'
@@ -985,17 +991,17 @@ window.addEventListener('DOMContentLoaded', () => {
 // 랭킹 불러오기 (SQL 함수 getrankbyplayername 사용, total_count 활용)
 async function getBestRecord() {
     try {
-        const { data, error } = await supabaseClient.rpc('getrankbyplayername', {
-            search: '',
-            page: 1,
-            page_size: 1
-        });
-        if (error) {
-            console.error('최고기록 불러오기 실패:', error);
+        const month = getCurrentMonth();
+        const response = await fetch(`${API_BASE_URL}/rankings/best/${month}`);
+
+        if (!response.ok) {
+            console.error('최고기록 불러오기 실패:', response.statusText);
             return;
         }
-        if (data && data.length > 0) {
-            bestTime = parseFloat(data[0].survival_time);
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            bestTime = parseFloat(result.data.survival_time);
             updateChallengeMessage();
         }
     } catch (err) {
@@ -1005,28 +1011,47 @@ async function getBestRecord() {
 
 async function getRankings() {
     try {
-        const { data, error } = await supabaseClient.rpc('getrankbyplayername', {
-            search: rankingSearch || '',
-            page: rankingPage,
-            page_size: rankingPageSize
-        });
-        if (error) {
-            console.error('랭킹 불러오기 실패:', error);
+        const month = getCurrentMonth();
+        // Fetch current month rankings with high limit for client-side filtering
+        const response = await fetch(`${API_BASE_URL}/rankings/${month}?limit=1000`);
+        const result = await response.json();
+
+        if (!result.success) {
+            console.error('랭킹 불러오기 실패:', result.error);
             return;
         }
+
+        let rankings = result.data || [];
+
+        // Client-side search filtering
+        if (rankingSearch && rankingSearch.trim() !== '') {
+            const searchLower = rankingSearch.toLowerCase();
+            rankings = rankings.filter(r =>
+                r.player_name.toLowerCase().includes(searchLower)
+            );
+        }
+
+        // Add rank numbers based on order (already sorted by survival_time DESC)
+        rankings.forEach((rank, index) => {
+            rank.rank = index + 1;
+        });
+
+        // Store total count for pagination
+        rankingTotal = rankings.length;
+
+        // Client-side pagination
+        const startIndex = (rankingPage - 1) * rankingPageSize;
+        const endIndex = startIndex + rankingPageSize;
+        const paginatedRankings = rankings.slice(startIndex, endIndex);
+
         const rankingList = document.getElementById('ranking-list');
         if (!rankingList) {
             console.error('랭킹 리스트 요소를 찾을 수 없습니다.');
             return;
         }
         rankingList.innerHTML = '';
-        // total_count로 전체 개수 갱신
-        if (data && data.length > 0 && data[0].total_count !== undefined) {
-            rankingTotal = data[0].total_count;
-        } else {
-            rankingTotal = 0;
-        }
-        data.forEach((rank, index) => {
+
+        paginatedRankings.forEach((rank, index) => {
             const li = document.createElement('li');
             const survivalTime = parseFloat(rank.survival_time);
             let dateStr = '';
@@ -1040,7 +1065,7 @@ async function getRankings() {
                 const ss = String(d.getUTCSeconds()).padStart(2, '0');
                 dateStr = `(UTC)${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
             }
-            
+
             // 국가 정보 표시
             let countryInfo = '';
             if (rank.country_code) {
@@ -1049,7 +1074,7 @@ async function getRankings() {
                     countryInfo = `${country.flag}`;
                 }
             }
-            
+
             // '순위 국기 닉네임 시간' 순서로 표시
             li.innerHTML = `#${rank.rank} ${countryInfo} ${rank.player_name} <span style='font-weight:bold;'>${survivalTime.toFixed(3)}s</span>` +
                 (dateStr ? `<br><span style='font-size:0.95em;color:#888;'>${dateStr}</span>` : '');
@@ -1267,30 +1292,31 @@ async function saveRankingFromModal() {
     // 4. 데이터베이스에 저장
     // ============================================
     try {
-        const { data, error } = await supabaseClient
-            .from('rankings')
-            .insert({
+        const response = await fetch(`${API_BASE_URL}/rankings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
                 player_name: sanitizedName,
                 survival_time: timeValidation.value,
                 country_code: countryValidation.value
-            });
+            })
+        });
 
-        if (error) {
-            console.error('랭킹 저장 실패:', error);
+        const result = await response.json();
 
-            // RLS 정책 위반 에러 처리
-            if (error.code === '42501' || error.message.includes('policy')) {
-                const policyError = currentLanguage === 'ko'
-                    ? '보안 정책에 의해 차단되었습니다. 데이터를 확인해주세요.'
-                    : 'Blocked by security policy. Please check your data.';
-                alert(policyError);
-            } else if (error.message.includes('Rate limit')) {
+        if (!result.success) {
+            console.error('랭킹 저장 실패:', result.error);
+
+            // Rate limit 에러 처리
+            if (response.status === 429 || result.error.includes('Rate limit')) {
                 const rateLimitError = currentLanguage === 'ko'
                     ? '너무 빠르게 등록했습니다. 잠시 후 다시 시도해주세요.'
                     : 'Too many attempts. Please wait before trying again.';
                 alert(rateLimitError);
             } else {
-                alert(t.rankingSaveFailed + ' ' + error.message);
+                alert(t.rankingSaveFailed + ' ' + result.error);
             }
         } else {
             // 저장 성공
@@ -1301,7 +1327,10 @@ async function saveRankingFromModal() {
         }
     } catch (err) {
         console.error('랭킹 저장 중 예외 발생:', err);
-        alert(t.rankingSaveError + ' ' + err.message);
+        const errorMessage = currentLanguage === 'ko'
+            ? '서버 연결 실패. 백엔드 서버가 실행 중인지 확인해주세요.'
+            : 'Server connection failed. Please check if the backend server is running.';
+        alert(errorMessage);
     } finally {
         isSavingRanking = false;
     }
